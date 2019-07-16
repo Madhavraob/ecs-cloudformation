@@ -1,0 +1,434 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  VPC with Public & Private subnets and bastionhost
+Parameters:
+  SSHLocation:
+    Description: >-
+      Lockdown SSH access to the bastion host (default can be accessed from
+      anywhere)
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid CIDR range of the form x.x.x.x/x.
+  BastionInstanceType:
+    Type: String
+    Default: t2.micro
+    Description: 'EC2 instance type for Bastion'
+  BastionKeyName:
+    Type: String
+    Description: 'Key pair used to SSH to Bastion host'
+Mappings: 
+  RegionMap:
+    us-east-1: 
+      ubuntu: "ami-04169656fea786776"
+      linux: "ami-04681a1dbd79675a5"
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      CidrBlock: 192.168.0.0/16
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  VpcNAT:
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - NatEIP
+        - AllocationId
+      SubnetId:
+        Ref: PublicSubnetA
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.10.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.11.0/24
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.12.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.13.0/24
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [2, !GetAZs '']
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.14.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [2, !GetAZs '']
+      VpcId: !Ref VPC
+      CidrBlock: 192.168.15.0/24
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 
+  PublicRouteTableInternetRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+  PrivateRouteTableInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcNAT
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref VpcNAT
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     SubnetId: !Ref PublicSubnetA
+     RouteTableId: !Ref PublicRouteTable
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     SubnetId: !Ref PublicSubnetB
+     RouteTableId: !Ref PublicRouteTable
+  PublicSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     SubnetId: !Ref PublicSubnetC
+     RouteTableId: !Ref PublicRouteTable
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     SubnetId: !Ref PrivateSubnetA
+     RouteTableId: !Ref PrivateRouteTable
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     SubnetId: !Ref PrivateSubnetB
+     RouteTableId: !Ref PrivateRouteTable
+  PrivateSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     SubnetId: !Ref PrivateSubnetC
+     RouteTableId: !Ref PrivateRouteTable
+  PublicNetworkAcl:
+    Type: 'AWS::EC2::NetworkAcl'
+    Properties:
+      VpcId: !Ref VPC
+  InboundHTTPPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '100'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '80'
+        To: '80'
+  InboundHTTPSPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '101'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '443'
+        To: '443'
+  InboundSSHPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '102'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: !Ref SSHLocation
+      PortRange:
+        From: '22'
+        To: '22'
+  InboundEphemeralPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '103'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '1024'
+        To: '65535'
+  OutboundPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '100'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'true'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '0'
+        To: '65535'
+  PublicSubnetANetworkAclAssociation:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      NetworkAclId: !Ref PublicNetworkAcl
+  PublicSubnetBNetworkAclAssociation:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      NetworkAclId: !Ref PublicNetworkAcl
+  PublicSubnetCNetworkAclAssociation:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      NetworkAclId: !Ref PublicNetworkAcl
+  PrivateSubnetANetworkAclAssociation:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      NetworkAclId: !Ref PublicNetworkAcl
+  PrivateSubnetBNetworkAclAssociation:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      NetworkAclId: !Ref PublicNetworkAcl
+  PrivateSubnetCNetworkAclAssociation:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnetC
+      NetworkAclId: !Ref PublicNetworkAcl
+  BastionEC2Instance:
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref BastionInstanceType
+      SecurityGroupIds:
+        - !GetAtt BastionSecurityGroup.GroupId
+      KeyName: !Ref BastionKeyName
+      ImageId: !FindInMap [ AMIMap, !Ref "AWS::Region", linux]
+      IamInstanceProfile: !Ref BastionInstanceProfile
+      SubnetId:
+        Ref: PublicSubnetA
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+  BastionElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  BastionElasticIPAssociation:
+    DependsOn: BastionEC2Instance
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt BastionElasticIP.AllocationId
+      InstanceId: !Ref BastionEC2Instance
+  BastionSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: '0.0.0.0/0'
+      VpcId: !Ref VPC
+      GroupDescription: 'Security group for Bastion host'
+  BastionInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: '/'
+      Roles:
+      - !Ref BastionIAMRole
+  BastionIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - 'ec2.amazonaws.com'
+          Action:
+          - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+      - PolicyName: 'ec2'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ec2:AssociateAddress'
+            Resource:
+            - '*'
+
+Outputs:
+  StackName:
+    Description: 'Stack name'
+    Value: !Sub '${AWS::StackName}'
+  AZs:
+    Description: 'AZs'
+    Value: 3
+    Export:
+      Name: !Sub '${AWS::StackName}-AZs'
+  AZA:
+    Description: 'AZ of A'
+    Value: !Select [0, !GetAZs '']
+    Export:
+      Name: !Sub '${AWS::StackName}-AZA'
+  AZB:
+    Description: 'AZ of B'
+    Value: !Select [1, !GetAZs '']
+    Export:
+      Name: !Sub '${AWS::StackName}-AZB'
+  AZC:
+    Description: 'AZ of C'
+    Value: !Select [2, !GetAZs '']
+    Export:
+      Name: !Sub '${AWS::StackName}-AZC'
+  VPC:
+    Description: 'VPC'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+  SubnetsPublic:
+    Description: 'Subnets public'
+    Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB, !Ref PublicSubnetC]]
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetsPublic'
+  SubnetsPrivate:
+    Description: 'Subnets private.'
+    Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB, !Ref PrivateSubnetC]]
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetsPrivate'
+  PublicSubnetA:
+    Description: 'Subnet A public.'
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetA'
+  PublicSubnetB:
+    Description: 'Subnet B public.'
+    Value: !Ref PublicSubnetB
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetB'
+  PublicSubnetC:
+    Description: 'Subnet C public.'
+    Value: !Ref PublicSubnetC
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetC'
+  PrivateSubnetA:
+    Description: 'Subnet A Private.'
+    Value: !Ref PrivateSubnetA
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetA'
+  PrivateSubnetB:
+    Description: 'Subnet B Private.'
+    Value: !Ref PrivateSubnetB
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetB'
+  PrivateSubnetC:
+    Description: 'Subnet C Private.'
+    Value: !Ref PrivateSubnetC
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetC'
+  PublicRouteTable:
+    Description: 'Route table public'
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicRouteTable'
+  PrivateRouteTable:
+    Description: 'Route table private'
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTable'
+  BastionSecurityGroupId:
+    Description: 'Bastion security group Id'
+    Value: !GetAtt BastionSecurityGroup.GroupId
+    Export:
+      Name: !Sub '${AWS::StackName}-BastionSecurityGroupId'
