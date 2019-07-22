@@ -1,5 +1,9 @@
 Parameters:
-  InstanceType:    
+  VPCStack:
+    Description: 'VPC stack name'
+    Type: String
+    Default: 'vpc-stack'
+  InstanceType:
     Description: 'EC2 instance type'
     Type: String
     Default: 't2.micro'
@@ -30,23 +34,16 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS Security Group
-      VpcId: 'vpc-92c15de8'
-  EcsSecurityGroupHTTPinbound:
+      VpcId:
+        Fn::ImportValue: !Sub "${VPCStack}-VPC"
+  EcsSecurityGroupEmphemeralTraffic:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref 'EcsSecurityGroup'
       IpProtocol: tcp
-      FromPort: '80'
-      ToPort: '80'
-      CidrIp: 0.0.0.0/0
-  EcsSecurityGroupHTTPSinbound:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref 'EcsSecurityGroup'
-      IpProtocol: tcp
-      FromPort: '443'
-      ToPort: '443'
-      CidrIp: 0.0.0.0/0
+      FromPort: '31000'
+      ToPort: '61000'
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
   EcsSecurityGroupSSHinbound:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -54,15 +51,26 @@ Resources:
       IpProtocol: tcp
       FromPort: '22'
       ToPort: '22'
-      CidrIp: 0.0.0.0/0
-  EcsSecurityGroupALBports:
-    Type: AWS::EC2::SecurityGroupIngress
+      SourceSecurityGroupId:
+        Fn::ImportValue: !Sub "${VPCStack}-BastionSecurityGroup"
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupId: !Ref 'EcsSecurityGroup'
-      IpProtocol: tcp
-      FromPort: '0'
-      ToPort: '61000'      
-      CidrIp: 0.0.0.0/0
+      GroupName: "LBSecurityGroup"
+      GroupDescription: Load Balancer Security Group
+      VpcId:
+        Fn::ImportValue: !Sub "${VPCStack}-VPC"
+      SecurityGroupIngress:
+        -
+          IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        -
+          IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -106,9 +114,9 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
-        - 'subnet-185a1a7f'
-        - 'subnet-c6c2d28c'
-        - 'subnet-e386cbbf'
+        - Fn::ImportValue: !Sub "${VPCStack}-PrivateSubnetA"
+        - Fn::ImportValue: !Sub "${VPCStack}-PrivateSubnetB"
+        - Fn::ImportValue: !Sub "${VPCStack}-PrivateSubnetC"
       LaunchConfigurationName: !Ref 'ContainerInstances'
       MinSize: '1'
       MaxSize: !Ref 'MaxSize'
@@ -126,10 +134,10 @@ Resources:
       - Key: idle_timeout.timeout_seconds
         Value: '20'
       Subnets:
-        - 'subnet-185a1a7f'
-        - 'subnet-c6c2d28c'
-        - 'subnet-e386cbbf'
-      SecurityGroups: [!Ref 'EcsSecurityGroup']
+        - Fn::ImportValue: !Sub "${VPCStack}-PublicSubnetA"
+        - Fn::ImportValue: !Sub "${VPCStack}-PublicSubnetB"
+        - Fn::ImportValue: !Sub "${VPCStack}-PublicSubnetC"
+      SecurityGroups: [!Ref 'LoadBalancerSecurityGroup']
       Tags:
        - Key: Project
          Value: 'madhav-ecs-cfn'
@@ -167,7 +175,8 @@ Resources:
       Port: 80
       Protocol: HTTP
       UnhealthyThresholdCount: 2
-      VpcId: 'vpc-92c15de8'
+      VpcId:
+       Fn::ImportValue: !Sub "${VPCStack}-VPC"
       Tags:
         - Key: Project
           Value: 'madhav'  
@@ -211,20 +220,20 @@ Resources:
         MinimumHealthyPercent: 50
   ECSServiceRole:
       Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
           Statement:
           - Effect: Allow
-            Principal:
-              Service: [ecs.amazonaws.com]
-            Action: ['sts:AssumeRole']
-        Path: /
-        Policies:
-        - PolicyName: ecs-service
-          PolicyDocument:
-            Statement:
-            - Effect: Allow
-              Action: ['elasticloadbalancing:DeregisterInstancesFromLoadBalancer', 'elasticloadbalancing:DeregisterTargets',
-                'elasticloadbalancing:Describe*', 'elasticloadbalancing:RegisterInstancesWithLoadBalancer',
-                'elasticloadbalancing:RegisterTargets', 'ec2:Describe*', 'ec2:AuthorizeSecurityGroupIngress']
-              Resource: '*'
+            Action: ['elasticloadbalancing:DeregisterInstancesFromLoadBalancer', 'elasticloadbalancing:DeregisterTargets',
+              'elasticloadbalancing:Describe*', 'elasticloadbalancing:RegisterInstancesWithLoadBalancer',
+              'elasticloadbalancing:RegisterTargets', 'ec2:Describe*', 'ec2:AuthorizeSecurityGroupIngress']
+            Resource: '*'
