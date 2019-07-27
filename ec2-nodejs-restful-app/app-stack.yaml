@@ -2,7 +2,7 @@ Parameters:
   VPCStack:
     Description: 'VPC stack name'
     Type: String
-    Default: 'vpc-stack'
+    Default: 'vpcStack'
   InstanceType:
     Description: 'EC2 instance type'
     Type: String
@@ -52,7 +52,7 @@ Resources:
       FromPort: '22'
       ToPort: '22'
       SourceSecurityGroupId:
-        Fn::ImportValue: !Sub "${VPCStack}-BastionSecurityGroup"
+        Fn::ImportValue: !Sub "${VPCStack}-BastionSecurityGroupId"
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -219,7 +219,7 @@ Resources:
         MaximumPercent: 150
         MinimumHealthyPercent: 50
   ECSServiceRole:
-      Type: AWS::IAM::Role
+    Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Statement:

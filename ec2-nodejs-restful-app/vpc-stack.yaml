@@ -18,6 +18,7 @@ Parameters:
     Description: 'EC2 instance type for Bastion'
   BastionKeyName:
     Type: String
+    Default: madhav
     Description: 'Key pair used to SSH to Bastion host'
 Mappings: 
   RegionMap:
@@ -140,7 +141,7 @@ Resources:
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref 
+      VpcId: !Ref VPC
   PublicRouteTableInternetRoute:
     Type: 'AWS::EC2::Route'
     DependsOn: VPCGatewayAttachment
