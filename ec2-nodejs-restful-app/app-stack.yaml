@@ -10,7 +10,7 @@ Parameters:
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: 'Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.'
-    Default: 'madhav'
+    Default: 'test'
   MaxSize:
     Type: String
     Default: '1'
@@ -22,11 +22,11 @@ Parameters:
   BackendContainerImage:
     Type: String
     MinLength: 1
-    Default: '369888207781.dkr.ecr.us-east-1.amazonaws.com/madhavecr:latest'
+    Default: 'madhavraob/nodebackend'
 Mappings: 
   AWSRegionToAMI:
     us-east-1: 
-      AMIID: "ami-0fac5486e4cff37f4"
+      AMIID: "ami-08b26b905b0d17561"
 Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster

@@ -18,13 +18,13 @@ Parameters:
     Description: 'EC2 instance type for Bastion'
   BastionKeyName:
     Type: String
-    Default: madhav
+    Default: test
     Description: 'Key pair used to SSH to Bastion host'
 Mappings: 
-  RegionMap:
+  AMIMap:
     us-east-1: 
       ubuntu: "ami-04169656fea786776"
-      linux: "ami-04681a1dbd79675a5"
+      linux: "ami-09d95fab7fff3776c"
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -87,7 +87,7 @@ Resources:
         - Key: Application
           Value: !Ref 'AWS::StackName'
         - Key: Network
-          Value: Public
+          Value: Private
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -110,7 +110,7 @@ Resources:
         - Key: Application
           Value: !Ref 'AWS::StackName'
         - Key: Network
-          Value: Public
+          Value: Private
   PublicSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
@@ -133,7 +133,7 @@ Resources:
         - Key: Application
           Value: !Ref 'AWS::StackName'
         - Key: Network
-          Value: Public
+          Value: Private
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
